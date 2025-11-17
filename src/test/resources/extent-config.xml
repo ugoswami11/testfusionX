@@ -1,0 +1,10 @@
+<extentreports>
+    <configuration>
+        <theme>dark</theme>
+        <encoding>UTF-8</encoding>
+        <protocol>HTTPS</protocol>
+        <documentTitle>TestFusionX UI Automation Report</documentTitle>
+        <reportName>TestFusionX Automation Execution</reportName>
+        <timestampFormat>dd-MM-yyyy HH:mm:ss</timestampFormat>
+    </configuration>
+</extentreports>
