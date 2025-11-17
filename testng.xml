@@ -1,0 +1,75 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd" >
+
+<suite name="TestFusionX Automation Suite"
+       verbose="1"
+       parallel="tests"
+       thread-count="4">
+
+    <!-- ===========================
+         GLOBAL SUITE PARAMETERS
+         =========================== -->
+    <!-- These can be overridden via CLI:
+         mvn clean test -Dbrowser=edge -Denvironment=staging
+     -->
+    <parameter name="browser" value="chrome"/>
+    <parameter name="environment" value="qa"/>
+
+    <!-- ===========================
+         UI AUTOMATION SUITE
+         =========================== -->
+    <test name="UI Regression Suite" parallel="classes">
+        <parameter name="browser" value="chrome"/>
+        <parameter name="environment" value="qa"/>
+        <classes>
+            <!-- This runner will contain tags like @Regression -->
+<!--            <class name="com.github.ugoswami11.testfusionx.testrunner.UIRegressionTestRunner"/>-->
+        </classes>
+    </test>
+
+    <test name="UI Sanity Suite" parallel="classes">
+        <parameter name="browser" value="firefox"/>
+        <parameter name="environment" value="qa"/>
+        <classes>
+            <!-- This runner will contain tags like @Sanity -->
+<!--            <class name="com.github.ugoswami11.testfusionx.testrunner.UISanityTestRunner"/>-->
+        </classes>
+    </test>
+
+    <!-- ===========================
+         SMOKE SUITE
+         =========================== -->
+    <test name="UI Smoke Suite">
+        <parameter name="browser" value="edge"/>
+        <parameter name="environment" value="dev"/>
+        <classes>
+            <!-- This runner will contain tags like @Smoke -->
+<!--            <class name="com.testfusionx.testrunner.UISmokeTestRunner"/>-->
+        </classes>
+    </test>
+
+    <!-- ===========================
+         PLACEHOLDER FOR OTHER TEST TYPES
+         =========================== -->
+    <!-- API Tests
+    <test name="API Suite">
+        <classes>
+            <class name="com.testfusionx.apitests.runner.APITestRunner"/>
+        </classes>
+    </test>
+    -->
+
+    <!-- DB Tests
+    <test name="Database Testing Suite">
+        <classes>
+            <class name="com.testfusionx.dbtests.runner.DBTestRunner"/>
+        </classes>
+    </test>
+    -->
+
+    <!-- Performance Tests (JMeter/Gatling)
+    <test name="Performance Suite">
+        ...
+    </test>
+    -->
+
+</suite>
