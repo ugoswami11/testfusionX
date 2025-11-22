@@ -4,6 +4,7 @@ import org.testng.ITestContext;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -23,86 +24,111 @@ public final class ConfigProvider {
     private static final String DEFAULT_CONFIG_FILE = "config.properties";
     private static final String ENVIRONMENT_FILE_FORMAT = "env.%s.properties";
 
-    /** Properties loaded once for entire test run */
+    /** Single source of truth for all config values */
     private static final Properties properties = new Properties();
 
-    // Static block executes once on framework startup
-    static {
-        loadBaseConfig();
-        loadEnvironmentConfig();
-    }
+    /** Tracks whether config has been initialized */
+    private static boolean initialized = false;
 
     private ConfigProvider() {
         // Prevent instantiation
     }
 
     // ---------------------------------------------------------------------------------------
+    // INITIALIZATION (Lazy Loading)
+    // ---------------------------------------------------------------------------------------
+
+    public static synchronized void init(ITestContext testContext) {
+        if (initialized) return;
+
+        // 1. Load base config.properties
+        loadBaseConfig();
+
+        // 2. Apply System property overrides BEFORE env load
+        overrideWithSystemProperties();
+
+        // 3. Apply TestNG parameters BEFORE env load
+        overrideWithTestNGParameters(testContext);
+
+        // 4. Now load env.<env>.properties (correct env)
+        loadEnvironmentConfig();
+
+        initialized = true;
+    }
+
+    private static void checkInitialized() {
+        if (!initialized) {
+            throw new IllegalStateException(
+                    "ConfigProvider.init(context) must be called before accessing configuration."
+            );
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
     // LOADERS
     // ---------------------------------------------------------------------------------------
 
-    /** Loads global config.properties */
     private static void loadBaseConfig() {
-        try (InputStream input = ConfigProvider.class
-                .getClassLoader()
-                .getResourceAsStream(DEFAULT_CONFIG_FILE)) {
+        try (InputStream input = getResource(DEFAULT_CONFIG_FILE)) {
 
             if (input == null) {
                 throw new RuntimeException("config.properties not found in classpath.");
             }
+
             properties.load(input);
+            System.out.println("✓ Loaded config.properties");
 
         } catch (IOException e) {
             throw new RuntimeException("Failed to load config.properties", e);
         }
     }
 
-    /** Loads environment-specific env.<env>.properties */
     private static void loadEnvironmentConfig() {
         String env = properties.getProperty("env", "qa").toLowerCase();
         String envFileName = String.format(ENVIRONMENT_FILE_FORMAT, env);
 
-        try (InputStream input = ConfigProvider.class
-                .getClassLoader()
-                .getResourceAsStream(envFileName)) {
+        try (InputStream input = getResource(envFileName)) {
 
             if (input == null) {
                 throw new RuntimeException("Environment properties file not found: " + envFileName);
             }
 
             properties.load(input);
+            System.out.println("✓ Loaded " + envFileName);
 
         } catch (IOException e) {
-            throw new RuntimeException("Error loading environment properties: " + envFileName, e);
+            throw new RuntimeException("Failed to load environment properties: " + envFileName, e);
         }
+    }
+
+    private static InputStream getResource(String file) {
+        return ConfigProvider.class.getClassLoader().getResourceAsStream(file);
     }
 
     // ---------------------------------------------------------------------------------------
     // OVERRIDES
     // ---------------------------------------------------------------------------------------
 
-    /**
-     * Override configuration with TestNG XML parameters.
-     * Example:
-     * <suite>
-     *     <parameter name="browser" value="firefox"/>
-     * </suite>
-     */
+    /** Only override keys that match our config properties — prevents JVM pollution */
+    public static void overrideWithSystemProperties() {
+        Properties systemProps = System.getProperties();
+
+        for (String key : systemProps.stringPropertyNames()) {
+            // Override ONLY if key exists in loaded config
+            if (properties.containsKey(key)) {
+                properties.setProperty(key, systemProps.getProperty(key));
+            }
+        }
+    }
+
     public static void overrideWithTestNGParameters(ITestContext context) {
         if (context == null) return;
 
-        context.getSuite().getXmlSuite().getAllParameters().forEach((key, value) ->
-                properties.setProperty(key, value)
-        );
-    }
+        Map<String, String> params = context.getSuite().getXmlSuite().getAllParameters();
 
-    /**
-     * Override configuration with System properties.
-     * Example: mvn clean test -Dbrowser=edge
-     */
-    public static void overrideWithSystemProperties() {
-        System.getProperties().forEach((key, value) -> {
-            if (key instanceof String && value instanceof String) {
-                properties.setProperty((String) key, (String) value);
+        params.forEach((key, value) -> {
+            if (properties.containsKey(key)) {
+                properties.setProperty(key, value);
             }
         });
     }
@@ -111,44 +137,32 @@ public final class ConfigProvider {
     // GETTERS
     // ---------------------------------------------------------------------------------------
 
+    public static String getProperty(String key, String defaultValue) {
+        checkInitialized();
+        return properties.getProperty(key, defaultValue);
+    }
+
     public static String get(String key) {
+        checkInitialized();
         return properties.getProperty(key);
     }
 
-    public static String getEnv() {
-        return properties.getProperty("env", "qa");
-    }
-
-    public static String getBaseUrl() {
-        return properties.getProperty("base.url");
-    }
-
-    public static String getBrowser() {
-        return properties.getProperty("browser", "chrome").toLowerCase();
-    }
-
-    public static boolean isHeadless() {
-        return Boolean.parseBoolean(properties.getProperty("headless", "false"));
-    }
-
-    public static boolean isRemoteExecution() {
-        return Boolean.parseBoolean(properties.getProperty("remote.execution", "false"));
-    }
-
-    public static int getImplicitWait() {
-        return Integer.parseInt(properties.getProperty("implicit.wait", "10"));
-    }
-
-    public static int getPageLoadTimeout() {
-        return Integer.parseInt(properties.getProperty("page.load.timeout", "20"));
-    }
-
-    public static int getExplicitWait() {
-        return Integer.parseInt(properties.getProperty("explicit.wait", "20"));
-    }
-
-    /** Useful for debugging or report generation */
     public static Properties getAllProperties() {
+        checkInitialized();
         return properties;
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // VALIDATION
+    // ---------------------------------------------------------------------------------------
+
+    public static void validateRequiredProperties(String... keys) {
+        checkInitialized();
+
+        for (String key : keys) {
+            if (!properties.containsKey(key)) {
+                throw new RuntimeException("Missing required property: " + key);
+            }
+        }
     }
 }
